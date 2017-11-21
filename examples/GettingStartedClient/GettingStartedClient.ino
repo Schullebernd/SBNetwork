@@ -7,16 +7,16 @@
 * If you want to use a Wemos, then change the line 38 "SBNetwork networkDevice(true, 6, 7);" to the correct pinout for a Wemos "SBNetwork networkDevice(true, D2, D8);".
 * **************************************************************
 * Step 1 - Prepare your device
-* Connect a nRF24L01 transmitter to the Arduino or to a Wemos D1 mini.
-* WEMOS > RF24			ARDUINO > RF24			 ---------------------------------------
-* ------------			--------------          |	GND #  # VCC			TOP VIEW	|
-* 3V3   > VCC			VCC		> VCC			|	 CE	#  # CSN			OF nRF24L01	|
-* GND   > GND			GND		> GND			|	SCK	#  # MOSI						|
-* D2	> CE			6		> CE			|  MISO #  # IRQ						|
-* D8	> CSN			7		> CSN			|										|
-* D7	> MOSI			11		> MOSI			 ---------------------------------------
-* D6	> MISO			12		> MISO
-* D5	> SCK			13		> SCK
+* Connect a nRF24L01 transmitter to a Wemos D1 mini or an Arduino Device
+* WEMOS > RF24      ARDUINO > RF24      --------------------------------------
+* ------------      --------------     |   GND #  # VCC          TOP VIEW     |
+*   3V3 > VCC          VCC  > VCC      |    CE #  # CSN          of nRF24L01  |
+*   GND > GND          GND  > GND      |   SCK #  # MOSI                      |
+*    D2 > CE             6  > CE       |  MISO #  # IRQ                       |
+*    D8 > CSN            7  > CSN      |                                      |
+*    D7 > MOSI          11  > MOSI      --------------------------------------
+*    D6 > MISO          12  > MISO
+*    D5 > SCK           13  > SCK
 *
 * Step 2 - Build the sketch for the client device
 * Connect the Arduino via USB to the PC, select the right board and COM interface in the tools menu and run the project.

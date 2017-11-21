@@ -11,12 +11,13 @@
 *
 * Step 2 - Connect the BME280 sensor to your arduino/wemos device
 * Connect		Arduino --> BME280
-*                    A4 --> SDA
-*                    A5 --> SCL
-*                   3V3 --> VCC
-*                   GND --> GND
-*                 empty --> CSB
-*                 empty --> SD0
+*           ------------------ 
+*                A4 --> SDA
+*                A5 --> SCL
+*               3V3 --> VCC
+*               GND --> GND
+*             empty --> CSB
+*             empty --> SD0
 * The I2C Address of BME280 usually is 0x76 --> Put this into bme.begin(0x76) at setup function. If this is not working try 0x77.
 *
 * Step 3 - Download and include the Sparkfun BME280 library.
