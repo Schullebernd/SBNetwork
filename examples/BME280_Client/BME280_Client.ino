@@ -23,8 +23,6 @@
 * https://github.com/sparkfun/SparkFun_BME280_Arduino_Library
 * 
 * Step 4 - Run the project
-* Open the file SBNetwork_config.h in the library folder ../libraries/SBNetwork/src/SBNetwork_config.h and comment out (put two // at the line start) the line 6.
-* Line 6 should now look like this //#define RUN_AS_MASTER
 * Connect the Arduino via USB to the PC, select the right board and COM interface in the tools menu and run the project.
 */
 
@@ -38,9 +36,10 @@
 //SBMacAddress deviceMac(0x01, 0x02, 0x03, 0x04, 0x05);
 SBMacAddress deviceMac(0x05, 0x04, 0x03, 0x02, 0x01);
 
-// Create a new network device with Wemos D1 mini and set the _ce and _cs pin
-//SBNetwork networkDevice(D2, D8);
-SBNetwork networkDevice(6, 7);
+// Create a new network device with Arduino and set the _ce and _cs pin
+// The first argument defines the type of the device. false=master and true=client device
+//SBNetwork networkDevice(false, D2, D8);
+SBNetwork networkDevice(true, 6, 7);
 
 // time variables
 uint32_t wait = 20000;
