@@ -3,7 +3,7 @@
 #define _SB_NETWORK_CONFIG_
 
 // Uncomment the following line, to compile the library for a master device.
-#define RUN_AS_MASTER
+//#define RUN_AS_MASTER
 
 #define _DEBUG
 

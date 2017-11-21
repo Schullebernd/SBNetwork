@@ -14,147 +14,140 @@
 
 class SBNetwork{  
   private:
+	/*
+	* Stores the uptime of the device
+	*/
+	unsigned long long _Uptime;
+	/*
+	* Stores the last time from millis()
+	*/
+	unsigned long _LastTime;
+	/*
+	* Stores the time when the device should ping to the master
+	*/
+	unsigned long _NextCheck;
+	/*
+	* Stores the connection state to a master device in case of it is a client device
+	*/
+	bool _Connected;
+	/**
+	* Here the payload will be stored for each frame receive
+	*/
+	uint8_t _ReceiveBuffer[MAX_PACKAGE_SIZE];
+	/**
+	* Here the received message is stored after a full message receive (fragmented or not fragmented)
+	*/
+	uint8_t _ReadBuffer[MAX_FRAME_SIZE];
+	/*
+	* Store the times, when the slaves sent the last signal to the master
+	*/
+	unsigned long long _SlavePings[MAX_CLIENTS];
+	/*
+	Points to the last message which was received
+	*/
+	void* _LastReceivedMessage;
+	/**
+	Stores the length of the last receives message
+	*/
+	uint8_t _LastReceivedMessageSize;
+	/**
+	Stores the mac of the sender of the last received message
+	*/
+	SBMacAddress _LastReceivedFromAddress;
 
-  /*
-   * Stores the uptime of the device
-   */
-  unsigned long long _Uptime;
-  /*
-   * Stores the last time from millis()
-   */
-  unsigned long _LastTime;
-  /*
-  * Stores the time when the device should ping to the master
-  */
-  unsigned long _NextCheck;
+	void initializeNetworkDevice(SBNetworkDevice &device, SBMacAddress mac);
 
-  /*
-  * Stores the connection state to a master device in case of it is a client device
-  */
-  bool _Connected;
+	bool sendToDevice(SBNetworkFrame frame);
 
-  /**
-  * Here the payload will be stored for each frame receive
-  */
-  uint8_t _ReceiveBuffer[MAX_PACKAGE_SIZE];
-  /**
-  * Here the received message is stored after a full message receive (fragmented or not fragmented)
-  */
-  uint8_t _ReadBuffer[MAX_FRAME_SIZE];
+	bool handleCommandPackage(SBNetworkFrame *frame);
 
-#if defined(RUN_AS_MASTER)
-  /*
-  * Store the times, when the slaves sent the last signal to the master
-  */
-  unsigned long long _SlavePings[MAX_CLIENTS];
-#endif
+	bool sendMasterAck(SBMacAddress mac);
 
-  /**
-  Points to the last message which was received
-  */
-  void* _LastReceivedMessage;
-  /**
-  Stores the length of the last receives message
-  */
-  uint8_t _LastReceivedMessageSize;
-  /**
-  Stores the mac of the sender of the last received message
-  */
-  SBMacAddress _LastReceivedFromAddress;
+	bool sendPairingAck(SBMacAddress mac);
 
-  void initializeNetworkDevice(SBNetworkDevice &device, SBMacAddress mac);
+	bool receive(SBNetworkFrame *frame);
 
-  bool sendToDevice(SBNetworkFrame frame);
-
-  bool handleCommandPackage(SBNetworkFrame *frame);
-
-#if defined(RUN_AS_MASTER)
-  bool sendMasterAck(SBMacAddress mac);
-
-  bool sendPairingAck(SBMacAddress mac);
-#endif
-
-  bool receive(SBNetworkFrame *frame);
-
-  bool receiveMessage(void **message, uint8_t *messageSize, SBMacAddress *mac);
+	bool receiveMessage(void **message, uint8_t *messageSize, SBMacAddress *mac);
 
 public:
 	/*
 	* Define the standard addresses for the sensor network
 	*/
-	//SBMacAddress _StandardSensorAddress = SBMacAddress(0x01, 0x01, 0x01, 0x01, 0x01);
 	SBMacAddress _BroadcastAddress = BROADCAST_MAC;
 
 	SBNetworkDevice NetworkDevice;
-#if defined(RUN_AS_MASTER)
-	SBMasterStorage _MasterStorage;
-#endif
+
+	SBMasterStorage MasterStorage;
 
 	RF24 radio;
 
-//######################################################################################
+	/*
+	* Stores the runtime mode of the device true=Client, false=Master
+	*/
+	bool RunAsClient;
 	
-/*
- * Constructor with setting the used pins for commnicate with the NRF24L01(+) chip.
- */
- SBNetwork(uint8_t cePin, uint8_t csPin);
+	/*
+	* Constructor with setting the used pins for commnicate with the NRF24L01(+) chip.
+	*/
+	SBNetwork(bool client, uint8_t cePin, uint8_t csPin);
   
- /*
- * Constructor with setting the used pins for commnicate with the NRF24L01(+) chip.
- */
-  SBNetwork();
+	/*
+	* Constructor no settings. The used pins for commnicate with the NRF24L01(+) chip will be the standard pins.
+	*/
+	SBNetwork();
 
-/*
- * Initializes the sensor / master
- */
-  void initialize(SBMacAddress mac);
-  void initialize(byte mac[]) { initialize(SBMacAddress(mac[0], mac[1], mac[2], mac[3], mac[4])); }
+	/*
+	* Initializes the sensor / master
+	*/
+	void initialize(SBMacAddress mac);
+	void initialize(byte mac[]) { initialize(SBMacAddress(mac[0], mac[1], mac[2], mac[3], mac[4])); }
 
 
- /*
-  * Resets the Sensors data (including the eeprom).
-  * The sensor then will loos the connaction to the master.
-  */
-  void resetData();
+	/*
+	* Resets the Sensors data (including the eeprom).
+	* The sensor then will loos the connaction to the master.
+	*/
+	void resetData();
 
-  /*
-  Sends a SBNetworkFrame to a device.
-  */
-  bool sendToDevice(SBMacAddress mac, void* message, uint8_t messageSize);
-  /*
-  Check if a new incomming transmission is available
-  */
-  uint8_t available() { return _LastReceivedMessageSize; }
-  /*
-  Returns a pointer to the buffer, where the last incomming transmission is stored
-  */
-  void* getMessage() { return _LastReceivedMessage; }
+	/*
+	Sends a SBNetworkFrame to a device.
+	*/
+	bool sendToDevice(SBMacAddress mac, void* message, uint8_t messageSize);
+	/*
+	Check if a new incomming transmission is available
+	*/
+	uint8_t available() { return _LastReceivedMessageSize; }
+	/*
+	Returns a pointer to the buffer, where the last incomming transmission is stored
+	*/
+	void* getMessage() { return _LastReceivedMessage; }
 
-#ifndef RUN_AS_MASTER
-  bool connectToNetwork();
+	bool connectToNetwork();
 
-  bool checkMaster();
-#else
+	bool checkMaster();
 
-  // Adds a mac to the storage and returns the position in the storage.
-  uint8_t addMac(SBMacAddress mac);
+	/*
+	Adds a mac to the storage and returns the position in the storage.
+	*/
+	uint8_t addMac(SBMacAddress mac);
 
-  // Removes the mac from the storage. If the mac was stored, it returns the position of the mac, if not, it returns -1.
-  uint8_t removeMac(SBMacAddress mac);
-#endif
+	/*
+	Removes the mac from the storage. If the mac was stored, it returns the position of the mac, if not, it returns -1.
+	*/
+	uint8_t removeMac(SBMacAddress mac);
 
-  bool pingDevice(SBMacAddress mac);
+	bool pingDevice(SBMacAddress mac);
 
-  // Updates the uptime counter.
-  // If this device is a sensor, it pings the master after a time. The time is definded in the config under SENSOR_CHECK_INTERVAL.
-  // If SENSOR_CHECK_INTERVAL is set to 0, it will not ping the master.
-  void update();
+	/*
+	Updates the uptime counter.
+	If this device is a sensor, it pings the master after a time. The time is definded in the config under SENSOR_CHECK_INTERVAL.
+	If SENSOR_CHECK_INTERVAL is set to 0, it will not ping the master.
+	*/
+	void update();
 
-  unsigned long long uptime(){
-	  return _Uptime;
-  }
+	unsigned long long uptime(){
+		return _Uptime;
+	}
 
 };
-
-
 #endif

@@ -1,5 +1,5 @@
-#ifndef _SB_SENSOR_NETWORK_DEVCIE_
-#define _SB_SENSOR_NETWORK_DEVCIE_
+#ifndef _SB_NETWORK_DEVCIE_
+#define _SB_NETWORK_DEVCIE_
 
 #include <EEPROM.h>
 
@@ -11,8 +11,6 @@ public:
 	byte			ConnectedToMaster;
 	uint32_t		NetworkKey;
 };
-
-#ifdef RUN_AS_MASTER
 
 class SBMasterStorage{
 public:
@@ -51,7 +49,5 @@ public:
 #endif
 	}
 };
-
-#endif
 
 #endif

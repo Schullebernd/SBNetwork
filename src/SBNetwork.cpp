@@ -23,14 +23,13 @@ void printDeviceData(SBNetworkDevice &device){
 	Serial.print(F("Master MAC = "));
 	printAddress(device.MasterMAC.Bytes);
 	Serial.println("");
-#ifdef RUN_AS_MASTER
 	Serial.print(F("NetKey = "));
 	Serial.print(device.NetworkKey, DEC);
 	Serial.println("");
-#endif
 }
 
-SBNetwork::SBNetwork(uint8_t cePin, uint8_t csPin) : radio(cePin, csPin){
+SBNetwork::SBNetwork(bool client, uint8_t cePin, uint8_t csPin) : radio(cePin, csPin){
+	RunAsClient = client;
 }
 
 void SBNetwork::initialize(SBMacAddress mac){
@@ -45,14 +44,14 @@ void SBNetwork::initialize(SBMacAddress mac){
 
 	this->initializeNetworkDevice(NetworkDevice, mac);
 
-#if defined(RUN_AS_MASTER)
-	this->_MasterStorage = SBMasterStorage::initialize();
-	for (uint8_t i = 0; i < MAX_CLIENTS; i++) {
-		Serial.print("Masterstorage Slot "); Serial.print(i); Serial.print(" ");
-		printAddress(_MasterStorage.Slaves[i]);
-		Serial.println();
+	if (!this->RunAsClient) {
+		this->MasterStorage = SBMasterStorage::initialize();
+		for (uint8_t i = 0; i < MAX_CLIENTS; i++) {
+			Serial.print("Masterstorage Slot "); Serial.print(i); Serial.print(" ");
+			printAddress(MasterStorage.Slaves[i]);
+			Serial.println();
+		}
 	}
-#endif
 
 	Serial.print(F("Initializing NRF24L01 transmitter..."));
 	this->radio.begin(); 
@@ -77,14 +76,14 @@ void SBNetwork::initialize(SBMacAddress mac){
 	this->radio.startListening();
 	Serial.println(F("Done"));
 
-#ifndef RUN_AS_MASTER // In case of we defined a client device
-	// Connect to a master
-	_Connected = false;
-	while (!_Connected) {
-		_Connected = connectToNetwork();
-		delay(500); // This can be an endless loop in case of no connection to master is available
+	if (this->RunAsClient) {
+		// Connect to a master
+		_Connected = false;
+		while (!_Connected) {
+			_Connected = connectToNetwork();
+			delay(500); // This can be an endless loop in case of no connection to master is available
+		}
 	}
-#endif
 }
 
 void SBNetwork::initializeNetworkDevice(SBNetworkDevice &device, SBMacAddress mac){
@@ -303,103 +302,106 @@ bool SBNetwork::receiveMessage(void **message, uint8_t *messageSize, SBMacAddres
 	return false;
 }
 
-#ifndef RUN_AS_MASTER
 bool SBNetwork::connectToNetwork(){
-	Serial.print(F("Try to connect to master..."));
-	// First we have to check, if we already have a master stored
-	if (!this->NetworkDevice.ConnectedToMaster){
-		Serial.println("Warning - Not paired to a master");
-		Serial.print(F("Sending broadcast transmission to find a master..."));
-		// If not, we have to search for a master
-		SBNetworkHeader header;
-		header.ToAddress = this->_BroadcastAddress;
-		header.FromAddress = this->NetworkDevice.MAC;
-		header.CommandType = SBS_COMMAND_SEARCH_MASTER;
-		header.FragmentCount = 1;
-		header.PackageId = millis();
+	if (this->RunAsClient) {
+		Serial.print(F("Try to connect to master..."));
+		// First we have to check, if we already have a master stored
+		if (!this->NetworkDevice.ConnectedToMaster) {
+			Serial.println("Warning - Not paired to a master");
+			Serial.print(F("Sending broadcast transmission to find a master..."));
+			// If not, we have to search for a master
+			SBNetworkHeader header;
+			header.ToAddress = this->_BroadcastAddress;
+			header.FromAddress = this->NetworkDevice.MAC;
+			header.CommandType = SBS_COMMAND_SEARCH_MASTER;
+			header.FragmentCount = 1;
+			header.PackageId = millis();
 
-		SBNetworkFrame frame;
-		frame.Header = header;
-		frame.Message = NULL;
-		frame.MessageSize = 0;
-		bool bMasterAck = this->sendToDevice(frame);
-		unsigned long started_waiting_at = millis();
-		boolean timeout = false;
-		while (!this->receive(&frame)){
-			if ((millis() - started_waiting_at) > 1000){
-				timeout = true;
-				break;
-			}
-		}
-
-		if (timeout){
-			Serial.println(F("Timeout"));
-			return false;
-		}
-		else{
-			if (frame.Header.CommandType != SBS_COMMAND_MASTER_ACK){
-				if (frame.MessageSize > 0){
-					free(frame.Message);
+			SBNetworkFrame frame;
+			frame.Header = header;
+			frame.Message = NULL;
+			frame.MessageSize = 0;
+			bool bMasterAck = this->sendToDevice(frame);
+			unsigned long started_waiting_at = millis();
+			boolean timeout = false;
+			while (!this->receive(&frame)) {
+				if ((millis() - started_waiting_at) > 1000) {
+					timeout = true;
+					break;
 				}
-				Serial.println(F("Failed - Got answer but no master ack"));
+			}
+
+			if (timeout) {
+				Serial.println(F("Timeout"));
 				return false;
 			}
-			else{
-				Serial.println(F("Done"));
-				Serial.print(F("Got answer from a master. Master-MAC is "));
-				printAddress(frame.Header.FromAddress);
-				Serial.println();
-				Serial.print(F("Try to pair with master..."));
-				SBNetworkFrame conFrame;
-				conFrame.Header.CommandType = SBS_COMMAND_REQUEST_PAIRING;
-				conFrame.Header.FragmentCount = 1;
-				conFrame.Header.FragmentNr = 0;
-				conFrame.Header.FromAddress = this->NetworkDevice.MAC;
-				conFrame.Header.PackageId = millis();
-				conFrame.Header.ToAddress = frame.Header.FromAddress;
-				conFrame.MessageSize = 0;
-				if (!this->sendToDevice(conFrame)){
-					Serial.println("Failed - Sending pairing request");
+			else {
+				if (frame.Header.CommandType != SBS_COMMAND_MASTER_ACK) {
+					if (frame.MessageSize > 0) {
+						free(frame.Message);
+					}
+					Serial.println(F("Failed - Got answer but no master ack"));
+					return false;
 				}
-				else{
-					while (!this->receive(&frame)){
-						if (millis() - started_waiting_at > 1000){
-							timeout = true;
-							break;
+				else {
+					Serial.println(F("Done"));
+					Serial.print(F("Got answer from a master. Master-MAC is "));
+					printAddress(frame.Header.FromAddress);
+					Serial.println();
+					Serial.print(F("Try to pair with master..."));
+					SBNetworkFrame conFrame;
+					conFrame.Header.CommandType = SBS_COMMAND_REQUEST_PAIRING;
+					conFrame.Header.FragmentCount = 1;
+					conFrame.Header.FragmentNr = 0;
+					conFrame.Header.FromAddress = this->NetworkDevice.MAC;
+					conFrame.Header.PackageId = millis();
+					conFrame.Header.ToAddress = frame.Header.FromAddress;
+					conFrame.MessageSize = 0;
+					if (!this->sendToDevice(conFrame)) {
+						Serial.println("Failed - Sending pairing request");
+					}
+					else {
+						while (!this->receive(&frame)) {
+							if (millis() - started_waiting_at > 1000) {
+								timeout = true;
+								break;
+							}
 						}
-					}
-					if (timeout) {
-						Serial.println(F("Timeout"));
-						return false;
-					}
-					if (frame.Header.CommandType != SBS_COMMAND_PAIRING_ACK){
-						Serial.println(F("Failed - Pairing rejected from the master"));
-						return false;
-					}
-					else{
-						this->NetworkDevice.MasterMAC = frame.Header.FromAddress;
-						this->NetworkDevice.NetworkKey = *(frame.Message);
-						this->NetworkDevice.ConnectedToMaster = -1;
-						EEPROM.put(0, NetworkDevice);
-						Serial.println("Suceeded");
-						Serial.print("Try to ping to master...");
-						delay(100);
+						if (timeout) {
+							Serial.println(F("Timeout"));
+							return false;
+						}
+						if (frame.Header.CommandType != SBS_COMMAND_PAIRING_ACK) {
+							Serial.println(F("Failed - Pairing rejected from the master"));
+							return false;
+						}
+						else {
+							this->NetworkDevice.MasterMAC = frame.Header.FromAddress;
+							this->NetworkDevice.NetworkKey = *(frame.Message);
+							this->NetworkDevice.ConnectedToMaster = -1;
+							EEPROM.put(0, NetworkDevice);
+							Serial.println("Suceeded");
+							Serial.print("Try to ping to master...");
+							delay(100);
+						}
 					}
 				}
 			}
 		}
+
+		bool bMasterAvailable = this->pingDevice(this->NetworkDevice.MasterMAC);
+		if (bMasterAvailable) {
+			Serial.println(F("Done - Master available"));
+		}
+		else {
+			Serial.println(F("Failed - Master not responding"));
+		}
+		return bMasterAvailable;
 	}
-	
-	bool bMasterAvailable = this->pingDevice(this->NetworkDevice.MasterMAC);
-	if (bMasterAvailable){
-		Serial.println(F("Done - Master available"));
+	else {
+		return false;
 	}
-	else{
-		Serial.println(F("Failed - Master not responding"));
-	}
-	return bMasterAvailable;
 }
-#endif
 
 bool SBNetwork::pingDevice(SBMacAddress mac){
 	SBNetworkHeader header;
@@ -418,119 +420,129 @@ bool SBNetwork::pingDevice(SBMacAddress mac){
 	return this->sendToDevice(frame);
 }
 
-bool SBNetwork::handleCommandPackage(SBNetworkFrame *frame){
-	
-#if defined(RUN_AS_MASTER)
-	// First check, if the device is listed in the storage
-	bool bFound = false;
-	for (uint8_t i = 0; i < MAX_CLIENTS; i++){
-		if (this->_MasterStorage.Slaves[i].isEquals(frame->Header.FromAddress)){
-			_SlavePings[i] = _Uptime;
-			bFound = true;
-			break;
+bool SBNetwork::handleCommandPackage(SBNetworkFrame *frame){	
+	if (!this->RunAsClient) {
+		// First check, if the device is listed in the storage
+		bool bFound = false;
+		for (uint8_t i = 0; i < MAX_CLIENTS; i++) {
+			if (this->MasterStorage.Slaves[i].isEquals(frame->Header.FromAddress)) {
+				_SlavePings[i] = _Uptime;
+				bFound = true;
+				break;
+			}
 		}
-	}
 
-	if (!bFound){
-		// If an unknown device was detected, then never handle the network control traffic and never handle the messages
+		if (!bFound) {
+			// If an unknown device was detected, then never handle the network control traffic and never handle the messages
 #ifdef _DEBUG
-		Serial.print("Unknown device detected with MAC: ");
-		printAddress(frame->Header.FromAddress);
-		Serial.println();
+			Serial.print("Unknown device detected with MAC: ");
+			printAddress(frame->Header.FromAddress);
+			Serial.println();
 #endif
-		//return false;
-	}
-	switch (frame->Header.CommandType){
-		case SBS_COMMAND_PING:{
+			//return false;
+		}
+		switch (frame->Header.CommandType) {
+		case SBS_COMMAND_PING: {
 #ifdef _DEBUG
 			Serial.println("Received 'PING'");
 #endif
 			break;
 		}
-		case SBS_COMMAND_SEARCH_MASTER:{
+		case SBS_COMMAND_SEARCH_MASTER: {
 #ifdef _DEBUG
 			Serial.println("Received 'SEARCH_MASTER' Package. Send MasterACK...");
 #endif
 			delay(100);
 			bool bSend = sendMasterAck(frame->Header.FromAddress);
-			if (bSend){
+			if (bSend) {
 				return false;
 			}
 			Serial.println("Done");
 			break;
 		}
-		case SBS_COMMAND_REQUEST_PAIRING:{
+		case SBS_COMMAND_REQUEST_PAIRING: {
 #ifdef _DEBUG
 			Serial.println("Received 'PAIRING_REQUEST' Package. Send PairingACK");
 #endif
 			delay(100);
 			// This is the point where we could stop orpcessing and wait for an user input on the controller to let the new device access the network
 			bool bSend = sendPairingAck(frame->Header.FromAddress);
-			if (bSend){
+			if (bSend) {
 				addMac(frame->Header.FromAddress);
 			}
 			break;
 		}
 		case SBS_COMMAND_NO_COMMAND:
-		default:{
+		default: {
 			//Serial.println("No Command received. Passing through transport layer.");
 			return bFound;
 			break;
 		}
+		}
+		return false;
 	}
-	return false;
-#else
-	return true;
-#endif
-
+	else {
+		return true;
+	}
 }
 
-#if defined(RUN_AS_MASTER)
 bool SBNetwork::sendMasterAck(SBMacAddress mac){
-	SBNetworkHeader header;
-	header.ToAddress = mac;
-	header.FromAddress = this->NetworkDevice.MAC;
-	header.CommandType = SBS_COMMAND_MASTER_ACK;
-	header.FragmentCount = 1;
-	header.PackageId = millis();
+	if (!this->RunAsClient) {
+		SBNetworkHeader header;
+		header.ToAddress = mac;
+		header.FromAddress = this->NetworkDevice.MAC;
+		header.CommandType = SBS_COMMAND_MASTER_ACK;
+		header.FragmentCount = 1;
+		header.PackageId = millis();
 
-	SBNetworkFrame frame;
-	frame.Header = header;
-	frame.Message = (uint8_t*)&(this->NetworkDevice.NetworkKey);
-	frame.MessageSize = sizeof(uint32_t);
-	return this->sendToDevice(frame);
+		SBNetworkFrame frame;
+		frame.Header = header;
+		frame.Message = (uint8_t*)&(this->NetworkDevice.NetworkKey);
+		frame.MessageSize = sizeof(uint32_t);
+		return this->sendToDevice(frame);
+	}
+	else {
+		return false;
+	}
 }
 
 
 bool SBNetwork::sendPairingAck(SBMacAddress mac){
-	SBNetworkHeader header;
-	header.ToAddress = mac;
-	header.FromAddress = this->NetworkDevice.MAC;
-	header.CommandType = SBS_COMMAND_PAIRING_ACK;
-	header.FragmentCount = 1;
-	header.PackageId = millis();
+	if (!this->RunAsClient) {
+		SBNetworkHeader header;
+		header.ToAddress = mac;
+		header.FromAddress = this->NetworkDevice.MAC;
+		header.CommandType = SBS_COMMAND_PAIRING_ACK;
+		header.FragmentCount = 1;
+		header.PackageId = millis();
 
-	SBNetworkFrame frame;
-	frame.Header = header;
-	frame.Message = NULL;
-	frame.MessageSize = 0;
+		SBNetworkFrame frame;
+		frame.Header = header;
+		frame.Message = NULL;
+		frame.MessageSize = 0;
 
-	return this->sendToDevice(frame);
-}
-#endif
-
-#ifndef RUN_AS_MASTER
-bool SBNetwork::checkMaster(){
-	if (this->pingDevice(this->NetworkDevice.MasterMAC)){
-		Serial.println("Master OK");
-		return true;
+		return this->sendToDevice(frame);
 	}
-	else{
-		Serial.println("Master ERROR");
+	else {
 		return false;
 	}
 }
-#endif
+
+bool SBNetwork::checkMaster(){
+	if (this->RunAsClient) {
+		if (this->pingDevice(this->NetworkDevice.MasterMAC)) {
+			Serial.println("Master OK");
+			return true;
+		}
+		else {
+			Serial.println("Master ERROR");
+			return false;
+		}
+	}
+	else {
+		return false;
+	}
+}
 
 void SBNetwork::update(){
 
@@ -545,15 +557,15 @@ void SBNetwork::update(){
 	}
 	_LastTime = millis();
 
-#ifndef RUN_AS_MASTER
-	if (NetworkDevice.ConnectedToMaster && MASTER_CHECK_INTERVAL){
-		if (_Uptime > _NextCheck){
-			// Now we have to check our sensors if they are still available
-			_NextCheck += MASTER_CHECK_INTERVAL;
-			checkMaster();
+	if (this->RunAsClient) {
+		if (NetworkDevice.ConnectedToMaster && MASTER_CHECK_INTERVAL) {
+			if (_Uptime > _NextCheck) {
+				// Now we have to check our sensors if they are still available
+				_NextCheck += MASTER_CHECK_INTERVAL;
+				checkMaster();
+			}
 		}
 	}
-#endif
 
 	_LastReceivedMessageSize = 0;
 	_LastReceivedMessage = NULL;
@@ -564,36 +576,40 @@ void SBNetwork::update(){
 	}
 }
 
-#if defined(RUN_AS_MASTER)
 uint8_t SBNetwork::addMac(SBMacAddress mac){
-
-	// iterate through the storage and look if the mac already exists
-	uint8_t iPos;
-	for (iPos = 0; iPos < MAX_CLIENTS; iPos++){
-		if (_MasterStorage.Slaves[iPos].isEquals(mac)){
-			return iPos;
+	if (!this->RunAsClient) {
+		// iterate through the storage and look if the mac already exists
+		uint8_t iPos;
+		for (iPos = 0; iPos < MAX_CLIENTS; iPos++) {
+			if (MasterStorage.Slaves[iPos].isEquals(mac)) {
+				return iPos;
+			}
 		}
-	}
-	// Search the first free place and add the mac
-	for (iPos = 0; iPos < MAX_CLIENTS; iPos++){
-		if (_MasterStorage.Slaves[iPos].isEquals(EMPTY_MAC)){
-			_MasterStorage.Slaves[iPos] = mac;
-			_MasterStorage.save();
-			return iPos;
+		// Search the first free place and add the mac
+		for (iPos = 0; iPos < MAX_CLIENTS; iPos++) {
+			if (MasterStorage.Slaves[iPos].isEquals(EMPTY_MAC)) {
+				MasterStorage.Slaves[iPos] = mac;
+				MasterStorage.save();
+				return iPos;
+			}
 		}
+		return -1;
 	}
-	return -1;
+	else {
+		return -1;
+	}
 }
 
 uint8_t SBNetwork::removeMac(SBMacAddress mac){
-	// iterate through the storage and look if the mac is in the list, if not, then return -1. If yes, remove it.
-	for (uint8_t iPos = 0; iPos < MAX_CLIENTS; iPos++){
-		if (_MasterStorage.Slaves[iPos].isEquals(mac)){
-			_MasterStorage.Slaves[iPos] = EMPTY_MAC;
-			_MasterStorage.save();
-			return iPos;
+	if (!this->RunAsClient) {
+		// iterate through the storage and look if the mac is in the list, if not, then return -1. If yes, remove it.
+		for (uint8_t iPos = 0; iPos < MAX_CLIENTS; iPos++) {
+			if (MasterStorage.Slaves[iPos].isEquals(mac)) {
+				MasterStorage.Slaves[iPos] = EMPTY_MAC;
+				MasterStorage.save();
+				return iPos;
+			}
 		}
+		return -1;
 	}
-	return -1;
 }
-#endif

@@ -3,11 +3,13 @@
 #define _SB_TYPES_
 
 #include <arduino.h>
-
-#define	SBS_COMMAND_PING 0 // Will be sent to check, if a device is available
+// Will be sent to check, if a device is available
+#define	SBS_COMMAND_PING 0 
 #define	SBS_COMMAND_NO_COMMAND 1
-#define	SBS_COMMAND_SEARCH_MASTER 2 // Will be sent from a slave to find search a master
-#define	SBS_COMMAND_MASTER_ACK 3 // Will be sent from a master after receiving a search master request
+// Will be sent from a slave to find search a master
+#define	SBS_COMMAND_SEARCH_MASTER 2
+// Will be sent from a master after receiving a search master request
+#define	SBS_COMMAND_MASTER_ACK 3
 #define	SBS_COMMAND_REQUEST_PAIRING 4
 #define SBS_COMMAND_PAIRING_ACK 5
 
