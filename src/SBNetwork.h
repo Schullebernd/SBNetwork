@@ -2,12 +2,15 @@
 #ifndef _SB_NETWORK_
 #define _SB_NETWORK_
 
-#define SB_VERSION "1.0.0"
+#define SB_VERSION "1.0.1"
+
+#include <RF24_config.h>
+#include <RF24.h>
+#include <nRF24L01.h>
 
 #include "SBTypes.h"
 #include "SBNetwork_config.h"
 #include "SBDevice.h"
-#include <RF24.h>
 
 #define BROADCAST_MAC (SBMacAddress(0x9E, 0x0E, 0x9E, 0x0E, 0x9E))
 #define EMPTY_MAC (SBMacAddress(0x00, 0x00, 0x00, 0x00, 0x00))
@@ -54,11 +57,17 @@ class SBNetwork{
 	Stores the mac of the sender of the last received message
 	*/
 	SBMacAddress _LastReceivedFromAddress;
+	/**
+	Enables or disables automatical client adding, when receiving a pairing resuest.
+	This is false by default.
+	*/
+	bool _EnableAutomaticClientAdding = false;
 
 	void initializeNetworkDevice(SBNetworkDevice &device, SBMacAddress mac);
 
 	bool sendToDevice(SBNetworkFrame frame);
 
+	// Return false, if the package was handled internally and if it is not relevant for the end user
 	bool handleCommandPackage(SBNetworkFrame *frame);
 
 	bool sendMasterAck(SBMacAddress mac);
@@ -120,7 +129,12 @@ public:
 	/*
 	Returns a pointer to the buffer, where the last incomming transmission is stored
 	*/
-	void* getMessage() { return _LastReceivedMessage; }
+	void* getMessage() { return _LastReceivedMessage > 0  ? _LastReceivedMessage : NULL; }
+
+	/*
+	Returns the mac of the sender from the last receives package
+	*/
+	SBMacAddress getLastReceivedMac() { return _LastReceivedFromAddress; };
 
 	bool connectToNetwork();
 
@@ -147,6 +161,22 @@ public:
 
 	unsigned long long uptime(){
 		return _Uptime;
+	}
+	
+	/**
+	Enables or disables automatic client adding when receiving a pairing resuest.
+	The default is false.
+	If the flag is set to true and the master receives a pairing request or a search master broadcast, it will not respond.
+	*/
+	void enableAutomaticClientAdding(bool enable) {
+		_EnableAutomaticClientAdding = enable;
+	}
+
+	/**
+	Returns the flag, if the master will accept new clients automatically
+	*/
+	bool isAutomaticClientAddingEnabled() {
+		return _EnableAutomaticClientAdding;
 	}
 
 };

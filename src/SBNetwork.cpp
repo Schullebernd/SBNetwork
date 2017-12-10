@@ -64,7 +64,7 @@ void SBNetwork::initialize(SBMacAddress mac){
 	//this->radio.enableDynamicAck();
 	this->radio.setAutoAck(true);
 	//this->radio.enableAckPayload();
-	this->radio.setRetries(0, 15);
+	this->radio.setRetries(40, 5);
 	
 	// Listen at the own address
 	this->radio.openReadingPipe(0, NetworkDevice.MAC);
@@ -226,7 +226,7 @@ bool SBNetwork::receive(SBNetworkFrame *frame){
 		else{
 			byte buffer[32];
 			radio.read(buffer, size);
-			// We cant use the target address of frame, because the first element in fram is the header
+			// We cant use the target address of frame, because the first element in frame is the header
 			memcpy(frame, buffer, sizeof(SBNetworkHeader));
 			frame->MessageSize = size - sizeof(SBNetworkHeader);
 			if (frame->MessageSize > 0){
@@ -450,26 +450,46 @@ bool SBNetwork::handleCommandPackage(SBNetworkFrame *frame){
 		}
 		case SBS_COMMAND_SEARCH_MASTER: {
 #ifdef _DEBUG
-			Serial.println("Received 'SEARCH_MASTER' Package. Send MasterACK...");
+			Serial.print("Received 'SEARCH_MASTER' Package. ");
 #endif
-			delay(100);
-			bool bSend = sendMasterAck(frame->Header.FromAddress);
-			if (bSend) {
-				return false;
+			if (_EnableAutomaticClientAdding) {
+#ifdef _DEBUG
+				Serial.println("Send MasterACK...");
+#endif
+				delay(100);
+				bool bSend = sendMasterAck(frame->Header.FromAddress);
+				if (bSend) {
+					return false;
+				}
+				Serial.println("Done");
 			}
-			Serial.println("Done");
+#if defined(_DEBUG)
+			else {
+				Serial.println("AutomaticClientAdding is deactivaed. Ignoring package.");
+			}
+#endif
 			break;
 		}
 		case SBS_COMMAND_REQUEST_PAIRING: {
 #ifdef _DEBUG
-			Serial.println("Received 'PAIRING_REQUEST' Package. Send PairingACK");
+			Serial.print("Received 'PAIRING_REQUEST' Package. ");
 #endif
-			delay(100);
-			// This is the point where we could stop orpcessing and wait for an user input on the controller to let the new device access the network
-			bool bSend = sendPairingAck(frame->Header.FromAddress);
-			if (bSend) {
-				addMac(frame->Header.FromAddress);
+			if (_EnableAutomaticClientAdding) {
+#ifdef _DEBUG
+				Serial.println("Send MasterACK...");
+#endif
+				delay(100);
+				// This is the point where we could stop orpcessing and wait for an user input on the controller to let the new device access the network
+				bool bSend = sendPairingAck(frame->Header.FromAddress);
+				if (bSend) {
+					addMac(frame->Header.FromAddress);
+				}
 			}
+#if defined(_DEBUG)
+			else {
+				Serial.println("AutomaticClientAdding is deactivaed. Ignoring package.");
+			}
+#endif
 			break;
 		}
 		case SBS_COMMAND_NO_COMMAND:
@@ -479,6 +499,7 @@ bool SBNetwork::handleCommandPackage(SBNetworkFrame *frame){
 			break;
 		}
 		}
+		// Package was handled by handleCommandPackage();
 		return false;
 	}
 	else {
