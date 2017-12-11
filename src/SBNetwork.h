@@ -2,7 +2,7 @@
 #ifndef _SB_NETWORK_
 #define _SB_NETWORK_
 
-#define SB_VERSION "1.0.1"
+#define SB_VERSION "1.0.2"
 
 #include <RF24_config.h>
 #include <RF24.h>

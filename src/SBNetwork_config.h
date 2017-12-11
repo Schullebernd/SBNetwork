@@ -5,7 +5,7 @@
 // Uncomment the following line, to compile the library for a master device.
 //#define RUN_AS_MASTER
 
-#define _DEBUG
+//#define _DEBUG
 
 #define MASTER_CHECK_INTERVAL 0 // All sensors will ping the master every xxx milliseconds. if set to 0, they will not ping the master
 

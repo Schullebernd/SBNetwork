@@ -135,7 +135,9 @@ void SBNetwork::resetData(){
 
 
 bool SBNetwork::sendToDevice(SBMacAddress mac, void* message, uint8_t messageSize){
+#if defined(_DEBUG)
 	Serial.print("Sending transmission");
+#endif
 	SBNetworkHeader header;
 	header.ToAddress = mac;
 	header.FromAddress = this->NetworkDevice.MAC;
@@ -145,7 +147,7 @@ bool SBNetwork::sendToDevice(SBMacAddress mac, void* message, uint8_t messageSiz
 	frame.Header = header;
 	uint8_t maxPackageSize = MAX_PACKAGE_SIZE;
 	if (messageSize <= maxPackageSize){
-		Serial.print(" with no fragmentation");
+		//Serial.print(" with no fragmentation");
 		// We can send directly without fragmentation
 		frame.Header.FragmentNr = 0;
 		frame.Header.FragmentCount = 1;
@@ -153,16 +155,18 @@ bool SBNetwork::sendToDevice(SBMacAddress mac, void* message, uint8_t messageSiz
 		frame.MessageSize = messageSize;
 		frame.Message = (uint8_t*)message;
 		bool bSuccess = this->sendToDevice(frame);
+#if defined(_DEBUG)
 		if (bSuccess) {
 			Serial.println(" Done");
 		}
 		else {
 			Serial.println(" Failed");
 		}
+#endif
 		return bSuccess;
 	}
 	else{
-		Serial.print(" with fragmentation ");
+		//Serial.print(" with fragmentation ");
 		// We have to send it in fragments
 		uint8_t fragmentCount = messageSize / maxPackageSize;
 		if ((fragmentCount * maxPackageSize) < messageSize){
@@ -248,9 +252,11 @@ bool SBNetwork::receiveMessage(void **message, uint8_t *messageSize, SBMacAddres
 		SBNetworkFrame frame;
 		bool bReceive = this->receive(&frame);
 		if (bReceive) {
+#ifdef _DEBUG
 			Serial.print("Incomming transmission from ");
 			printAddress(frame.Header.FromAddress);
 			Serial.println();
+#endif
 			if (frame.Header.FragmentCount == 1) {
 				// We only have to receive this package
 				memcpy(_ReadBuffer, frame.Message, maxPackageSize);
@@ -307,7 +313,7 @@ bool SBNetwork::connectToNetwork(){
 		Serial.print(F("Try to connect to master..."));
 		// First we have to check, if we already have a master stored
 		if (!this->NetworkDevice.ConnectedToMaster) {
-			Serial.println("Warning - Not paired to a master");
+			Serial.println(F("Warning - Not paired to a master"));
 			Serial.print(F("Sending broadcast transmission to find a master..."));
 			// If not, we have to search for a master
 			SBNetworkHeader header;
@@ -358,7 +364,7 @@ bool SBNetwork::connectToNetwork(){
 					conFrame.Header.ToAddress = frame.Header.FromAddress;
 					conFrame.MessageSize = 0;
 					if (!this->sendToDevice(conFrame)) {
-						Serial.println("Failed - Sending pairing request");
+						Serial.println(F("Failed - Sending pairing request"));
 					}
 					else {
 						while (!this->receive(&frame)) {
@@ -390,12 +396,14 @@ bool SBNetwork::connectToNetwork(){
 		}
 
 		bool bMasterAvailable = this->pingDevice(this->NetworkDevice.MasterMAC);
+#ifdef _DEBUG
 		if (bMasterAvailable) {
 			Serial.println(F("Done - Master available"));
 		}
 		else {
 			Serial.println(F("Failed - Master not responding"));
 		}
+#endif
 		return bMasterAvailable;
 	}
 	else {
@@ -435,7 +443,7 @@ bool SBNetwork::handleCommandPackage(SBNetworkFrame *frame){
 		if (!bFound) {
 			// If an unknown device was detected, then never handle the network control traffic and never handle the messages
 #ifdef _DEBUG
-			Serial.print("Unknown device detected with MAC: ");
+			Serial.print(F("Unknown device detected with MAC: "));
 			printAddress(frame->Header.FromAddress);
 			Serial.println();
 #endif
@@ -444,39 +452,39 @@ bool SBNetwork::handleCommandPackage(SBNetworkFrame *frame){
 		switch (frame->Header.CommandType) {
 		case SBS_COMMAND_PING: {
 #ifdef _DEBUG
-			Serial.println("Received 'PING'");
+			Serial.println(F("Received 'PING'"));
 #endif
 			break;
 		}
 		case SBS_COMMAND_SEARCH_MASTER: {
 #ifdef _DEBUG
-			Serial.print("Received 'SEARCH_MASTER' Package. ");
+			Serial.print(F("Received 'SEARCH_MASTER' Package. "));
 #endif
 			if (_EnableAutomaticClientAdding) {
 #ifdef _DEBUG
-				Serial.println("Send MasterACK...");
+				Serial.println(F("Send MasterACK..."));
 #endif
 				delay(100);
 				bool bSend = sendMasterAck(frame->Header.FromAddress);
 				if (bSend) {
 					return false;
 				}
-				Serial.println("Done");
+				Serial.println(F("Done"));
 			}
 #if defined(_DEBUG)
 			else {
-				Serial.println("AutomaticClientAdding is deactivaed. Ignoring package.");
+				Serial.println(F("AutomaticClientAdding is deactivaed. Ignoring package."));
 			}
 #endif
 			break;
 		}
 		case SBS_COMMAND_REQUEST_PAIRING: {
 #ifdef _DEBUG
-			Serial.print("Received 'PAIRING_REQUEST' Package. ");
+			Serial.print(F("Received 'PAIRING_REQUEST' Package. "));
 #endif
 			if (_EnableAutomaticClientAdding) {
 #ifdef _DEBUG
-				Serial.println("Send MasterACK...");
+				Serial.println(F("Send MasterACK..."));
 #endif
 				delay(100);
 				// This is the point where we could stop orpcessing and wait for an user input on the controller to let the new device access the network
@@ -487,7 +495,7 @@ bool SBNetwork::handleCommandPackage(SBNetworkFrame *frame){
 			}
 #if defined(_DEBUG)
 			else {
-				Serial.println("AutomaticClientAdding is deactivaed. Ignoring package.");
+				Serial.println(F("AutomaticClientAdding is deactivaed. Ignoring package."));
 			}
 #endif
 			break;
@@ -552,11 +560,15 @@ bool SBNetwork::sendPairingAck(SBMacAddress mac){
 bool SBNetwork::checkMaster(){
 	if (this->RunAsClient) {
 		if (this->pingDevice(this->NetworkDevice.MasterMAC)) {
+#ifdef _DEBUG
 			Serial.println("Master OK");
+#endif
 			return true;
 		}
 		else {
+#ifdef _DEBUG
 			Serial.println("Master ERROR");
+#endif
 			return false;
 		}
 	}
