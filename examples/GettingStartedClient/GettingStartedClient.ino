@@ -37,6 +37,10 @@ SBMacAddress deviceMac(0x05, 0x04, 0x03, 0x02, 0x01);
 //SBNetwork networkDevice(false, D2, D8);
 SBNetwork networkDevice(true, 6, 7);
 
+// time variables
+uint32_t wait = 4000;
+uint32_t lastWait = wait;
+
 void setup() {
 
 	Serial.begin(19200);
@@ -44,11 +48,9 @@ void setup() {
 
 	// Initialize the network device
 	networkDevice.initialize(deviceMac);
-}
 
-// time variables
-uint32_t wait = 4000;
-uint32_t lastWait = wait;
+	lastWait = millis();
+}
 
 void loop() {
 

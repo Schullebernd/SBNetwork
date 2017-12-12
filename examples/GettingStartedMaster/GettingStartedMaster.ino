@@ -45,6 +45,9 @@ void setup() {
 	// Initialize the network device
 	networkDevice.initialize(deviceMac);
 
+  // Enables the master to automatically add new clients
+  networkDevice.enableAutomaticClientAdding(true);
+
 	Serial.println(F("*** PRESS 'N' to reset the device"));
 }
 
@@ -58,6 +61,20 @@ void loop() {
 		if (c == 'N') {
 			networkDevice.resetData();
 		}
+    if (c == 'E') {
+      // Only master should handle the switch of adding new clients
+      if (!networkDevice.RunAsClient) {
+        Serial.println("*****");
+        if (networkDevice.isAutomaticClientAddingEnabled()) {
+          Serial.println("Deactivating AutomaticClientAdding");
+        }
+        else {
+          Serial.println("Activating AutomaticClientAdding");
+        }
+        Serial.println("*****");
+        networkDevice.enableAutomaticClientAdding(!networkDevice.isAutomaticClientAddingEnabled());        
+      }
+    }
 	}
 
 	// Call this in the loop() function to maintain the network device

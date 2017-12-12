@@ -176,7 +176,9 @@ bool SBNetwork::sendToDevice(SBMacAddress mac, void* message, uint8_t messageSiz
 		//Serial.print(F("Fragment count = "));
 		//Serial.println(fragmentCount, DEC);
 		for (uint8_t i = 0; i < fragmentCount; i++){
+#if defined(_DEBUG)
 			Serial.print(".");
+#endif
 			uint8_t buffer[32];
 			if (i != (fragmentCount - 1)){
 				memcpy(buffer, (uint8_t*)message + (i * maxPackageSize), maxPackageSize);
@@ -193,11 +195,15 @@ bool SBNetwork::sendToDevice(SBMacAddress mac, void* message, uint8_t messageSiz
 
 			bool bSuccess = this->sendToDevice(frame);
 			if (!bSuccess){
+#if defined(_DEBUG)
 				Serial.println(" Failed");
+#endif
 				return false;
 			}
 		}
+#if defined(_DEBUG)
 		Serial.println(" Done");
+#endif
 		return true;
 	}
 }
@@ -396,14 +402,12 @@ bool SBNetwork::connectToNetwork(){
 		}
 
 		bool bMasterAvailable = this->pingDevice(this->NetworkDevice.MasterMAC);
-#ifdef _DEBUG
 		if (bMasterAvailable) {
 			Serial.println(F("Done - Master available"));
 		}
 		else {
 			Serial.println(F("Failed - Master not responding"));
 		}
-#endif
 		return bMasterAvailable;
 	}
 	else {
