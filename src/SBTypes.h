@@ -4,14 +4,17 @@
 
 #include <arduino.h>
 // Will be sent to check, if a device is available
-#define	SBS_COMMAND_PING 0 
-#define	SBS_COMMAND_NO_COMMAND 1
+#define	SB_COMMAND_PING				0
+// Will be sent, if normal data is transported
+#define	SB_COMMAND_NO_COMMAND		1
 // Will be sent from a slave to find search a master
-#define	SBS_COMMAND_SEARCH_MASTER 2
+#define	SB_COMMAND_SEARCH_MASTER	2
 // Will be sent from a master after receiving a search master request
-#define	SBS_COMMAND_MASTER_ACK 3
-#define	SBS_COMMAND_REQUEST_PAIRING 4
-#define SBS_COMMAND_PAIRING_ACK 5
+#define	SB_COMMAND_MASTER_ACK		3
+// Will be sent from a new client, in case he wants to join the network
+#define	SB_COMMAND_REQUEST_PAIRING	4
+// Will be sent from the master after successfule adding a new client
+#define	SB_COMMAND_PAIRING_ACK		5
 
 class SBMacAddress{
   public:

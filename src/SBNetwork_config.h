@@ -15,4 +15,6 @@
 
 #define FLASH_SIZE 512
 
+#define ACK_WAIT 100
+
 #endif

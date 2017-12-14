@@ -2,7 +2,7 @@
 #ifndef _SB_NETWORK_
 #define _SB_NETWORK_
 
-#define SB_VERSION "1.0.2"
+#define SB_VERSION "1.0.3"
 
 #include <RF24_config.h>
 #include <RF24.h>
@@ -73,6 +73,8 @@ class SBNetwork{
 	bool sendMasterAck(SBMacAddress mac);
 
 	bool sendPairingAck(SBMacAddress mac);
+
+	bool receiveInternal(SBNetworkFrame *frame);
 
 	bool receive(SBNetworkFrame *frame);
 

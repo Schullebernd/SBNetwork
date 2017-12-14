@@ -141,7 +141,7 @@ bool SBNetwork::sendToDevice(SBMacAddress mac, void* message, uint8_t messageSiz
 	SBNetworkHeader header;
 	header.ToAddress = mac;
 	header.FromAddress = this->NetworkDevice.MAC;
-	header.CommandType = SBS_COMMAND_NO_COMMAND;
+	header.CommandType = SB_COMMAND_NO_COMMAND;
 	
 	SBNetworkFrame frame = SBNetworkFrame();
 	frame.Header = header;
@@ -225,30 +225,36 @@ bool SBNetwork::sendToDevice(SBNetworkFrame frame){
 	return bSuccess;
 }
 
-bool SBNetwork::receive(SBNetworkFrame *frame){
+bool SBNetwork::receiveInternal(SBNetworkFrame *frame) {
 	uint8_t pipe = -1;
-	if (radio.available(&pipe)){
+	if (radio.available(&pipe)) {
 		// Variable for the received timestamp
 		uint8_t size = radio.getDynamicPayloadSize();
-		if (size == 0){
+		if (size == 0) {
 			return false;
 		}
-		else{
+		else {
 			byte buffer[32];
 			radio.read(buffer, size);
 			// We cant use the target address of frame, because the first element in frame is the header
 			memcpy(frame, buffer, sizeof(SBNetworkHeader));
 			frame->MessageSize = size - sizeof(SBNetworkHeader);
-			if (frame->MessageSize > 0){
+			if (frame->MessageSize > 0) {
 				//uint8_t *payload = (uint8_t*)malloc(frame->MessageSize);
 				memcpy(_ReceiveBuffer, buffer + sizeof(SBNetworkHeader), frame->MessageSize);
 				frame->Message = _ReceiveBuffer;
 			}
-			// We must check, if the received package is a NO_COMMAND_PACKAGE otherwise we have to handle it internally
-			return this->handleCommandPackage(frame);
+			return true;
 		}
 	}
 	return false;
+}
+
+bool SBNetwork::receive(SBNetworkFrame *frame){
+	if (receiveInternal(frame)) {
+		// We must check, if the received package is a NO_COMMAND_PACKAGE otherwise we have to handle it internally
+		return this->handleCommandPackage(frame);
+	}
 }
 
 bool SBNetwork::receiveMessage(void **message, uint8_t *messageSize, SBMacAddress *mac){
@@ -325,7 +331,7 @@ bool SBNetwork::connectToNetwork(){
 			SBNetworkHeader header;
 			header.ToAddress = this->_BroadcastAddress;
 			header.FromAddress = this->NetworkDevice.MAC;
-			header.CommandType = SBS_COMMAND_SEARCH_MASTER;
+			header.CommandType = SB_COMMAND_SEARCH_MASTER;
 			header.FragmentCount = 1;
 			header.PackageId = millis();
 
@@ -348,7 +354,7 @@ bool SBNetwork::connectToNetwork(){
 				return false;
 			}
 			else {
-				if (frame.Header.CommandType != SBS_COMMAND_MASTER_ACK) {
+				if (frame.Header.CommandType != SB_COMMAND_MASTER_ACK) {
 					if (frame.MessageSize > 0) {
 						free(frame.Message);
 					}
@@ -362,7 +368,7 @@ bool SBNetwork::connectToNetwork(){
 					Serial.println();
 					Serial.print(F("Try to pair with master..."));
 					SBNetworkFrame conFrame;
-					conFrame.Header.CommandType = SBS_COMMAND_REQUEST_PAIRING;
+					conFrame.Header.CommandType = SB_COMMAND_REQUEST_PAIRING;
 					conFrame.Header.FragmentCount = 1;
 					conFrame.Header.FragmentNr = 0;
 					conFrame.Header.FromAddress = this->NetworkDevice.MAC;
@@ -383,7 +389,7 @@ bool SBNetwork::connectToNetwork(){
 							Serial.println(F("Timeout"));
 							return false;
 						}
-						if (frame.Header.CommandType != SBS_COMMAND_PAIRING_ACK) {
+						if (frame.Header.CommandType != SB_COMMAND_PAIRING_ACK) {
 							Serial.println(F("Failed - Pairing rejected from the master"));
 							return false;
 						}
@@ -403,12 +409,20 @@ bool SBNetwork::connectToNetwork(){
 
 		bool bMasterAvailable = this->pingDevice(this->NetworkDevice.MasterMAC);
 		if (bMasterAvailable) {
-			Serial.println(F("Done - Master available"));
-		}
-		else {
+			long lNow = millis();
+			SBNetworkFrame pingAckFrame;
+			while ((lNow + 100) > millis()) {
+				if (this->receiveInternal(&pingAckFrame)) {
+					if (pingAckFrame.Header.CommandType == SB_COMMAND_PING) {
+						Serial.println(F("Done - Master available"));
+						return true;
+					}
+				}
+			}
 			Serial.println(F("Failed - Master not responding"));
 		}
-		return bMasterAvailable;
+		Serial.println("Error - Sending Ping to Master");
+		return false;
 	}
 	else {
 		return false;
@@ -419,7 +433,7 @@ bool SBNetwork::pingDevice(SBMacAddress mac){
 	SBNetworkHeader header;
 	header.ToAddress = mac;
 	header.FromAddress = this->NetworkDevice.MAC;
-	header.CommandType = SBS_COMMAND_PING;
+	header.CommandType = SB_COMMAND_PING;
 	header.FragmentCount = 1;
 	header.FragmentNr = 0;
 	header.PackageId = millis();
@@ -454,13 +468,16 @@ bool SBNetwork::handleCommandPackage(SBNetworkFrame *frame){
 			//return false;
 		}
 		switch (frame->Header.CommandType) {
-		case SBS_COMMAND_PING: {
+		case SB_COMMAND_PING: {
 #ifdef _DEBUG
 			Serial.println(F("Received 'PING'"));
 #endif
+			if (bFound) {
+				pingDevice(frame->Header.FromAddress);
+			}
 			break;
 		}
-		case SBS_COMMAND_SEARCH_MASTER: {
+		case SB_COMMAND_SEARCH_MASTER: {
 #ifdef _DEBUG
 			Serial.print(F("Received 'SEARCH_MASTER' Package. "));
 #endif
@@ -468,7 +485,7 @@ bool SBNetwork::handleCommandPackage(SBNetworkFrame *frame){
 #ifdef _DEBUG
 				Serial.println(F("Send MasterACK..."));
 #endif
-				delay(100);
+				delay(20);
 				bool bSend = sendMasterAck(frame->Header.FromAddress);
 				if (bSend) {
 					return false;
@@ -482,7 +499,7 @@ bool SBNetwork::handleCommandPackage(SBNetworkFrame *frame){
 #endif
 			break;
 		}
-		case SBS_COMMAND_REQUEST_PAIRING: {
+		case SB_COMMAND_REQUEST_PAIRING: {
 #ifdef _DEBUG
 			Serial.print(F("Received 'PAIRING_REQUEST' Package. "));
 #endif
@@ -490,7 +507,7 @@ bool SBNetwork::handleCommandPackage(SBNetworkFrame *frame){
 #ifdef _DEBUG
 				Serial.println(F("Send MasterACK..."));
 #endif
-				delay(100);
+				delay(20);
 				// This is the point where we could stop orpcessing and wait for an user input on the controller to let the new device access the network
 				bool bSend = sendPairingAck(frame->Header.FromAddress);
 				if (bSend) {
@@ -504,7 +521,7 @@ bool SBNetwork::handleCommandPackage(SBNetworkFrame *frame){
 #endif
 			break;
 		}
-		case SBS_COMMAND_NO_COMMAND:
+		case SB_COMMAND_NO_COMMAND:
 		default: {
 			//Serial.println("No Command received. Passing through transport layer.");
 			return bFound;
@@ -524,7 +541,7 @@ bool SBNetwork::sendMasterAck(SBMacAddress mac){
 		SBNetworkHeader header;
 		header.ToAddress = mac;
 		header.FromAddress = this->NetworkDevice.MAC;
-		header.CommandType = SBS_COMMAND_MASTER_ACK;
+		header.CommandType = SB_COMMAND_MASTER_ACK;
 		header.FragmentCount = 1;
 		header.PackageId = millis();
 
@@ -545,7 +562,7 @@ bool SBNetwork::sendPairingAck(SBMacAddress mac){
 		SBNetworkHeader header;
 		header.ToAddress = mac;
 		header.FromAddress = this->NetworkDevice.MAC;
-		header.CommandType = SBS_COMMAND_PAIRING_ACK;
+		header.CommandType = SB_COMMAND_PAIRING_ACK;
 		header.FragmentCount = 1;
 		header.PackageId = millis();
 
@@ -553,7 +570,6 @@ bool SBNetwork::sendPairingAck(SBMacAddress mac){
 		frame.Header = header;
 		frame.Message = NULL;
 		frame.MessageSize = 0;
-
 		return this->sendToDevice(frame);
 	}
 	else {
