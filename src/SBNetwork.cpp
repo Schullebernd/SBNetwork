@@ -408,28 +408,14 @@ bool SBNetwork::connectToNetwork(){
 		}
 
 		bool bMasterAvailable = this->pingDevice(this->NetworkDevice.MasterMAC);
-		if (bMasterAvailable) {
-			long lNow = millis();
-			SBNetworkFrame pingAckFrame;
-			while ((lNow + 100) > millis()) {
-				if (this->receiveInternal(&pingAckFrame)) {
-					if (pingAckFrame.Header.CommandType == SB_COMMAND_PING) {
-						Serial.println(F("Done - Master available"));
-						return true;
-					}
-				}
-			}
-			Serial.println(F("Failed - Master not responding"));
-		}
-		Serial.println("Error - Sending Ping to Master");
-		return false;
+		return bMasterAvailable;
 	}
 	else {
 		return false;
 	}
 }
 
-bool SBNetwork::pingDevice(SBMacAddress mac){
+bool SBNetwork::pingDeviceInternal(SBMacAddress mac, bool waitForAck) {
 	SBNetworkHeader header;
 	header.ToAddress = mac;
 	header.FromAddress = this->NetworkDevice.MAC;
@@ -443,7 +429,35 @@ bool SBNetwork::pingDevice(SBMacAddress mac){
 	frame.Message = NULL;
 	frame.MessageSize = 0;
 
-	return this->sendToDevice(frame);
+	bool bSend = this->sendToDevice(frame);
+	if (bSend) {
+		if (waitForAck) {
+			long lNow = millis();
+			SBNetworkFrame pingAckFrame;
+			while ((lNow + 100) > millis()) {
+				if (this->receiveInternal(&pingAckFrame)) {
+					if (pingAckFrame.Header.CommandType == SB_COMMAND_PING) {
+						Serial.println(F("Done - Device available"));
+						return true;
+					}
+				}
+			}
+#if defined(_DEBUG)
+			Serial.println(F("Failed - Device not responding"));
+#endif
+			return false;
+		}
+	}
+#if defined(_DEBUG)
+	else {
+		Serial.println("Failed - Device not responding");
+	}
+#endif
+	return bSend;
+}
+
+bool SBNetwork::pingDevice(SBMacAddress mac){
+	return pingDeviceInternal(mac, true);
 }
 
 bool SBNetwork::handleCommandPackage(SBNetworkFrame *frame){	
@@ -473,7 +487,7 @@ bool SBNetwork::handleCommandPackage(SBNetworkFrame *frame){
 			Serial.println(F("Received 'PING'"));
 #endif
 			if (bFound) {
-				pingDevice(frame->Header.FromAddress);
+				pingDeviceInternal(frame->Header.FromAddress, false);
 			}
 			break;
 		}
@@ -614,7 +628,7 @@ void SBNetwork::update(){
 		if (NetworkDevice.ConnectedToMaster && MASTER_CHECK_INTERVAL) {
 			if (_Uptime > _NextCheck) {
 				// Now we have to check our sensors if they are still available
-				_NextCheck += MASTER_CHECK_INTERVAL;
+				_NextCheck = _Uptime + MASTER_CHECK_INTERVAL;
 				checkMaster();
 			}
 		}

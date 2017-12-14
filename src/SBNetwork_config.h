@@ -7,7 +7,7 @@
 
 //#define _DEBUG
 
-#define MASTER_CHECK_INTERVAL 0 // All sensors will ping the master every xxx milliseconds. if set to 0, they will not ping the master
+#define MASTER_CHECK_INTERVAL 0 // All slaves will ping the master every xxx milliseconds. if set to 0, they will not ping the master
 
 #define MAX_CLIENTS 10
 

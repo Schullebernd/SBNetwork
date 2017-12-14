@@ -2,7 +2,7 @@
 #ifndef _SB_NETWORK_
 #define _SB_NETWORK_
 
-#define SB_VERSION "1.0.3"
+#define SB_VERSION "1.0.4"
 
 #include <RF24_config.h>
 #include <RF24.h>
@@ -79,6 +79,8 @@ class SBNetwork{
 	bool receive(SBNetworkFrame *frame);
 
 	bool receiveMessage(void **message, uint8_t *messageSize, SBMacAddress *mac);
+
+	bool pingDeviceInternal(SBMacAddress mac, bool waitForAck);
 
 public:
 	/*
