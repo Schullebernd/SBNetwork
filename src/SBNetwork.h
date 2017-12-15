@@ -8,8 +8,6 @@
 #include <RF24.h>
 #include <nRF24L01.h>
 
-#include "SBTypes.h"
-#include "SBNetwork_config.h"
 #include "SBDevice.h"
 
 #define BROADCAST_MAC (SBMacAddress(0x9E, 0x0E, 0x9E, 0x0E, 0x9E))
