@@ -15,6 +15,8 @@
 #define	SB_COMMAND_REQUEST_PAIRING	4
 // Will be sent from the master after successfule adding a new client
 #define	SB_COMMAND_PAIRING_ACK		5
+// Will always be sent, when packages are received and the other device is a known device
+#define SB_COMMAND_ACK				6
 
 class SBMacAddress{
   public:

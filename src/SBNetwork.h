@@ -65,6 +65,8 @@ class SBNetwork{
 
 	void initializeNetworkDevice(SBNetworkDevice &device, SBMacAddress mac);
 
+	bool sendToDeviceInternal(SBNetworkFrame frame, bool waitForAck);
+
 	bool sendToDevice(SBNetworkFrame frame);
 
 	// Return false, if the package was handled internally and if it is not relevant for the end user
@@ -80,7 +82,9 @@ class SBNetwork{
 
 	bool receiveMessage(void **message, uint8_t *messageSize, SBMacAddress *mac);
 
-	bool pingDeviceInternal(SBMacAddress mac, bool waitForAck);
+	bool waitForAckFrom(SBMacAddress mac);
+
+	bool sendAckTo(SBMacAddress mac);
 
 public:
 	/*
@@ -181,6 +185,14 @@ public:
 	*/
 	bool isAutomaticClientAddingEnabled() {
 		return _EnableAutomaticClientAdding;
+	}
+
+	/*
+	Returns the count of bytes that are reserved for SBNetworkLib in the internal flash.
+	If you want to use the internal flash, get shure not writing into the storage of SBNetwork.
+	*/
+	uint16_t getFlashOffset() {
+		return SB_NETWORK_FLASH_SIZE;
 	}
 
 };

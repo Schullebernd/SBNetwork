@@ -2,19 +2,23 @@
 #ifndef _SB_NETWORK_CONFIG_
 #define _SB_NETWORK_CONFIG_
 
-// Uncomment the following line, to compile the library for a master device.
-//#define RUN_AS_MASTER
-
+// Generates details debug messages about sending and receiving data packages
 //#define _DEBUG
 
-#define MASTER_CHECK_INTERVAL 0 // All slaves will ping the master every xxx milliseconds. if set to 0, they will not ping the master
+// All slaves will ping the master every xxx milliseconds. if set to 0, they will not ping the master
+#define MASTER_CHECK_INTERVAL 0
 
 #define MAX_CLIENTS 10
 
-#define CLIENT_TIMEOUT 20000
+#define CLIENT_TIMEOUT 60000
 
-#define FLASH_SIZE 512
+// Waittime for an ACK package
+#define ACK_WAIT 50
 
-#define ACK_WAIT 100
+// Count of trys to send a data package
+#define RETRY_COUNT 10
+
+// Milliseconds to wait between two retries
+#define RETRY_DALY 40
 
 #endif
