@@ -3,6 +3,7 @@
 #define _SB_NETWORK_CONFIG_
 
 // Generates details debug messages about sending and receiving data packages
+
 //#define _DEBUG
 
 // All slaves will ping the master every xxx milliseconds. if set to 0, they will not ping the master
@@ -12,13 +13,10 @@
 
 #define CLIENT_TIMEOUT 60000
 
-// Waittime for an ACK package
-#define ACK_WAIT 50
+// Milliseconds to wait for fragmented packages
+#define FRAGMENT_TIMEOUT 80
 
-// Count of trys to send a data package
-#define RETRY_COUNT 10
-
-// Milliseconds to wait between two retries
-#define RETRY_DALY 40
+// Milliseconds to wait between two fragment sendings
+#define FRAGMENT_DELAY 10
 
 #endif

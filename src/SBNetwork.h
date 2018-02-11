@@ -2,7 +2,7 @@
 #ifndef _SB_NETWORK_
 #define _SB_NETWORK_
 
-#define SB_VERSION "1.0.4"
+#define SB_VERSION "1.0.5"
 
 #include <RF24_config.h>
 #include <RF24.h>
@@ -12,6 +12,8 @@
 
 #define BROADCAST_MAC (SBMacAddress(0x9E, 0x0E, 0x9E, 0x0E, 0x9E))
 #define EMPTY_MAC (SBMacAddress(0x00, 0x00, 0x00, 0x00, 0x00))
+
+void printAddress(byte address[5]);
 
 class SBNetwork{  
   private:
@@ -56,6 +58,10 @@ class SBNetwork{
 	*/
 	SBMacAddress _LastReceivedFromAddress;
 	/**
+	/ Stores the flag, that tells the handle command function to await a fragent or not
+	*/
+	bool _AwaitingFragmentPackage = false;
+	/**
 	Enables or disables automatical client adding, when receiving a pairing resuest.
 	This is false by default.
 	*/
@@ -63,7 +69,7 @@ class SBNetwork{
 
 	void initializeNetworkDevice(SBNetworkDevice &device, SBMacAddress mac);
 
-	bool sendToDeviceInternal(SBNetworkFrame frame, bool waitForAck);
+	bool sendToDeviceInternal(SBNetworkFrame frame);
 
 	bool sendToDevice(SBNetworkFrame frame);
 
@@ -79,10 +85,6 @@ class SBNetwork{
 	bool receive(SBNetworkFrame *frame);
 
 	bool receiveMessage(void **message, uint8_t *messageSize, SBMacAddress *mac);
-
-	bool waitForAckFrom(SBMacAddress mac);
-
-	bool sendAckTo(SBMacAddress mac);
 
 public:
 	/*

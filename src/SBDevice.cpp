@@ -14,9 +14,11 @@ SBMasterStorage SBMasterStorage::initialize() {
 		EEPROM.put(0 + sizeof(SBNetworkDevice), storage);
 #if defined(ESP8266)
 		EEPROM.commit();
-		EEPROM.end();
 #endif
-	}
+	}	
+#if defined(ESP8266)
+	EEPROM.end();
+#endif
 	return storage;
 }
 

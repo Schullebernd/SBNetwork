@@ -47,7 +47,7 @@ void SBNetwork::initialize(SBMacAddress mac){
 	if (!this->RunAsClient) {
 		this->MasterStorage = SBMasterStorage::initialize();
 		for (uint8_t i = 0; i < MAX_CLIENTS; i++) {
-			Serial.print("Masterstorage Slot "); Serial.print(i); Serial.print(" ");
+			Serial.print(F("Masterstorage Slot ")); Serial.print(i); Serial.print(" ");
 			printAddress(MasterStorage.Slaves[i]);
 			Serial.println();
 		}
@@ -62,9 +62,9 @@ void SBNetwork::initialize(SBMacAddress mac){
 	this->radio.enableDynamicPayloads();
 	
 	//this->radio.enableDynamicAck();
-	this->radio.setAutoAck(false); // We use our own ack handling
+	this->radio.setAutoAck(true); // We use the integrated package handling
 	//this->radio.enableAckPayload();
-	this->radio.setRetries(40, 5);
+	this->radio.setRetries(0, 15);
 	
 	// Listen at the own address
 	this->radio.openReadingPipe(0, NetworkDevice.MAC);
@@ -109,7 +109,7 @@ void SBNetwork::initializeNetworkDevice(SBNetworkDevice &device, SBMacAddress ma
 #if defined(ESP8266)
 		EEPROM.commit();
 #endif
-		Serial.println("Done");
+		Serial.println(F("Done"));
 		printDeviceData(device);
 	}
 #if defined(ESP8266)
@@ -136,7 +136,7 @@ void SBNetwork::resetData(){
 
 bool SBNetwork::sendToDevice(SBMacAddress mac, void* message, uint8_t messageSize){
 #if defined(_DEBUG)
-	Serial.print("Sending transmission");
+	Serial.println(F("Sending transmission"));
 #endif
 	SBNetworkHeader header;
 	header.ToAddress = mac;
@@ -156,10 +156,10 @@ bool SBNetwork::sendToDevice(SBMacAddress mac, void* message, uint8_t messageSiz
 		bool bSuccess = this->sendToDevice(frame);
 #if defined(_DEBUG)
 		if (bSuccess) {
-			Serial.println(" Done");
+			Serial.println(F(" Done"));
 		}
 		else {
-			Serial.println(" Failed");
+			Serial.println(F(" Failed"));
 		}
 #endif
 		return bSuccess;
@@ -171,6 +171,7 @@ bool SBNetwork::sendToDevice(SBMacAddress mac, void* message, uint8_t messageSiz
 			fragmentCount++;
 		}
 		for (uint8_t i = 0; i < fragmentCount; i++){
+			delay(FRAGMENT_DELAY);
 #if defined(_DEBUG)
 			Serial.print(".");
 #endif
@@ -191,19 +192,19 @@ bool SBNetwork::sendToDevice(SBMacAddress mac, void* message, uint8_t messageSiz
 			bool bSuccess = this->sendToDevice(frame);
 			if (!bSuccess){
 #if defined(_DEBUG)
-				Serial.println(" Failed ");
+				Serial.println(F(" Failed "));
 #endif
 				return false;
 			}
 		}
 #if defined(_DEBUG)
-		Serial.println(" Done");
+		Serial.println(F(" Done"));
 #endif
 		return true;
 	}
 }
 
-bool SBNetwork::sendToDeviceInternal(SBNetworkFrame frame, bool waitForAck) {
+bool SBNetwork::sendToDeviceInternal(SBNetworkFrame frame) {
 	uint8_t bufferSize = sizeof(SBNetworkHeader) + frame.MessageSize;
 	uint8_t buffer[32]; // = (uint8_t*)malloc(bufferSize);
 	memcpy(buffer, &frame.Header, sizeof(SBNetworkHeader));
@@ -211,64 +212,21 @@ bool SBNetwork::sendToDeviceInternal(SBNetworkFrame frame, bool waitForAck) {
 		memcpy(buffer + sizeof(SBNetworkHeader), frame.Message, frame.MessageSize);
 	}
 	bool bSuccess = false;
-	uint8_t iCounter = 0;
-	while (!bSuccess && iCounter < RETRY_COUNT) {
-		// Send to broadcast
-		radio.stopListening();
-		radio.openWritingPipe(frame.Header.ToAddress);
-		bSuccess = radio.write(buffer, bufferSize);
-		radio.openReadingPipe(0, this->NetworkDevice.MAC);
-		radio.startListening();
-		if (bSuccess) {
-			bSuccess = waitForAck ? waitForAckFrom(frame.Header.ToAddress) : true;
-		}
-		delay(40); // Waittime between two sendings
-		iCounter++;
-	}
+	radio.stopListening();
+	radio.openWritingPipe(frame.Header.ToAddress);
+
+#if defined(_DEBUG)
+	Serial.print(millis());
+	Serial.println(F(" Sending physical data"));
+#endif
+	bSuccess = radio.write(buffer, bufferSize);
+	radio.openReadingPipe(0, this->NetworkDevice.MAC);
+	radio.startListening();
 	return bSuccess;
 }
 
 bool SBNetwork::sendToDevice(SBNetworkFrame frame){
-	return sendToDeviceInternal(frame, true);
-}
-
-bool SBNetwork::waitForAckFrom(SBMacAddress mac) {
-#if defined(_DEBUG)
-	Serial.print(F("Wait for Ack... "));
-#endif
-	long lNow = millis();
-	// We need the counter in case of the unoccationally case, that during the wait, the timer overflows ans starts with 0
-	uint16_t iCounter = 1;
-	SBNetworkFrame frame;
-	while (lNow + ACK_WAIT > millis() && iCounter) {
-		if (this->receiveInternal(&frame)) {
-			if (frame.Header.FromAddress.isEquals(mac)) {
-				if (frame.Header.CommandType == SB_COMMAND_ACK) {
-#if defined(_DEBUG)
-					Serial.print(F("Done - Counter = ")); Serial.println(iCounter);
-#endif
-					return true;
-				}
-			}
-		}
-		iCounter++;
-	}
-#if defined(_DEBUG)
-	Serial.print(F("Failed - Counter = ")); Serial.println(iCounter);
-#endif
-	return false;
-}
-
-bool SBNetwork::sendAckTo(SBMacAddress mac) {
-	SBNetworkFrame frame;
-	frame.Header.ToAddress = mac;
-	frame.Header.FromAddress = this->NetworkDevice.MAC;
-	frame.Header.FragmentCount = 1;
-	frame.Header.FragmentNr = 0;
-	frame.Header.PackageId = millis();
-	frame.Header.CommandType = SB_COMMAND_ACK;
-	frame.MessageSize = 0;
-	return sendToDeviceInternal(frame, false);
+	return sendToDeviceInternal(frame);
 }
 
 bool SBNetwork::receiveInternal(SBNetworkFrame *frame) {
@@ -301,50 +259,71 @@ bool SBNetwork::receive(SBNetworkFrame *frame){
 		// We must check, if the received package is a NO_COMMAND_PACKAGE otherwise we have to handle it internally
 		return this->handleCommandPackage(frame);
 	}
+	return false;
 }
 
 bool SBNetwork::receiveMessage(void **message, uint8_t *messageSize, SBMacAddress *mac){
 	uint8_t pipe = -1;
 	uint8_t maxPackageSize = MAX_PACKAGE_SIZE;
 	if (radio.available()){
+#if defined(_DEBUG)
+		Serial.print(millis());
+		Serial.println(F(" Radio available"));
+#endif
 		SBNetworkFrame frame;
 		bool bReceive = this->receive(&frame);
 		if (bReceive) {
 #ifdef _DEBUG
-			Serial.print("Incomming transmission from ");
+			Serial.print(F("Incomming transmission from "));
 			printAddress(frame.Header.FromAddress);
 			Serial.println();
 #endif
 			if (frame.Header.FragmentCount == 1) {
+#ifdef _DEBUG
+				Serial.println(F("no fragments"));
+#endif				
 				// We only have to receive this package
 				memcpy(_ReadBuffer, frame.Message, maxPackageSize);
 				(*message) = _ReadBuffer;
 				(*messageSize) = frame.MessageSize;
 				(*mac) = frame.Header.FromAddress;
+
 				return true;
 			}
 			else if (frame.Header.FragmentNr == 0) {
-				//Serial.print(frame.Header.FragmentNr + 1); Serial.print("/"); Serial.println(frame.Header.FragmentCount);
+#ifdef _DEBUG
+				Serial.println(F("with fragments"));
+#endif
+				Serial.print(millis()); Serial.print(F(" Fragment received ")); Serial.print(frame.Header.FragmentNr + 1); Serial.print("/"); Serial.println(frame.Header.FragmentCount);
 				// We have to receive more packages
 				memcpy(_ReadBuffer, frame.Message, maxPackageSize);
-				delay(50); // We need a delay here, because the opposite needs time to send the next package
-				while (radio.available()) {
-					bReceive = this->receive(&frame);
-					if (!bReceive) {
-						return false;
-					}
-					else {
+				//delay(50); // We need a delay here, because the opposite needs time to send the next package
+				unsigned long timeout = millis() + FRAGMENT_TIMEOUT;
+				_AwaitingFragmentPackage = true;
+				while (radio.available() || timeout > millis()) {
+					if (this->receive(&frame)){
+						Serial.print(millis()); Serial.print(F(" Fragment received ")); Serial.print(frame.Header.FragmentNr + 1);
+						Serial.print(F("/")); Serial.println(frame.Header.FragmentCount);
 						memcpy(_ReadBuffer + (frame.Header.FragmentNr * maxPackageSize), frame.Message, frame.MessageSize);
+						// Now wait again for the next fragment
+						timeout = millis() + FRAGMENT_TIMEOUT;
 						if (frame.Header.FragmentNr == (frame.Header.FragmentCount - 1)) {
 							// Last fragment received
 							*message = _ReadBuffer;
 							*messageSize = ((frame.Header.FragmentCount - 1) * maxPackageSize) + frame.MessageSize;
 							(*mac) = frame.Header.FromAddress;
+							_AwaitingFragmentPackage = false;
 							return true;
 						}
-						delay(10);
+						//delay(10);
 					}
+					delay(1);
 				}
+				_AwaitingFragmentPackage = false;
+
+				Serial.print(millis());
+				Serial.println(F(" Fragment timeout"));
+
 				return false;
 			}
 			else {
@@ -377,7 +356,8 @@ bool SBNetwork::connectToNetwork(){
 			frame.Header = header;
 			frame.Message = NULL;
 			frame.MessageSize = 0;
-			bool bMasterAck = this->sendToDeviceInternal(frame, false);
+			bool bMasterAck = this->sendToDeviceInternal(frame);
+
 			unsigned long started_waiting_at = millis();
 			boolean timeout = false;
 			while (!this->receive(&frame)) {
@@ -394,9 +374,10 @@ bool SBNetwork::connectToNetwork(){
 			else {
 				if (frame.Header.CommandType != SB_COMMAND_MASTER_ACK) {
 					if (frame.MessageSize > 0) {
-						free(frame.Message);
+						//free(frame.Message);
 					}
 					Serial.println(F("Failed - Got answer but no master ack"));
+					Serial.println(frame.Header.CommandType);
 					return false;
 				}
 				else {
@@ -413,7 +394,7 @@ bool SBNetwork::connectToNetwork(){
 					conFrame.Header.PackageId = millis();
 					conFrame.Header.ToAddress = frame.Header.FromAddress;
 					conFrame.MessageSize = 0;
-					if (!this->sendToDeviceInternal(conFrame, false)) {
+					if (!this->sendToDeviceInternal(conFrame)) {
 						Serial.println(F("Failed - Sending pairing request"));
 					}
 					else {
@@ -429,6 +410,7 @@ bool SBNetwork::connectToNetwork(){
 						}
 						if (frame.Header.CommandType != SB_COMMAND_PAIRING_ACK) {
 							Serial.println(F("Failed - Pairing rejected from the master"));
+							Serial.println(frame.Header.CommandType);
 							return false;
 						}
 						else {
@@ -436,8 +418,8 @@ bool SBNetwork::connectToNetwork(){
 							this->NetworkDevice.NetworkKey = *(frame.Message);
 							this->NetworkDevice.ConnectedToMaster = -1;
 							EEPROM.put(0, NetworkDevice);
-							Serial.println("Suceeded");
-							Serial.print("Try to ping to master...");
+							Serial.println(F("Suceeded"));
+							Serial.print(F("Try to ping to master..."));
 							delay(100);
 						}
 					}
@@ -472,7 +454,7 @@ bool SBNetwork::pingDevice(SBMacAddress mac){
 		Serial.println(F("Done - Device available"));
 	}
 	else {
-		Serial.println("Failed - Device not responding");
+		Serial.println(F("Failed - Device not responding"));
 	}
 	return bSend;
 }
@@ -495,10 +477,6 @@ bool SBNetwork::handleCommandPackage(SBNetworkFrame *frame){
 #ifdef _DEBUG
 			Serial.println(F("Received 'PING'"));
 #endif
-			// Only, when the device is a paired slave, send a ping back
-			if (bFound) {
-				sendAckTo(frame->Header.FromAddress);
-			}
 			break;
 		}
 		case SB_COMMAND_SEARCH_MASTER: {
@@ -506,7 +484,7 @@ bool SBNetwork::handleCommandPackage(SBNetworkFrame *frame){
 			// When automatic Client adding is activated
 			if (_EnableAutomaticClientAdding) {
 				Serial.print(F("Send MasterACK..."));
-				delay(20);
+				delay(100);
 				bool bSend = sendMasterAck(frame->Header.FromAddress);
 				if (bSend) {
 					Serial.println(F("Done"));
@@ -525,7 +503,7 @@ bool SBNetwork::handleCommandPackage(SBNetworkFrame *frame){
 			// When automatic Client adding is activated
 			if (_EnableAutomaticClientAdding) {
 				Serial.print(F("Send PairingACK... "));
-				delay(20);
+				delay(100);
 				// This is the point where we could stop prpcessing and wait for an user input on the controller to let the new device access the network
 				bool bSend = sendPairingAck(frame->Header.FromAddress);
 				// If sending was successfull, then add the new slave
@@ -544,19 +522,37 @@ bool SBNetwork::handleCommandPackage(SBNetworkFrame *frame){
 			}
 			break;
 		}
-		case SB_COMMAND_NO_COMMAND:
+		case SB_COMMAND_NO_COMMAND: {
 #ifdef _DEBUG
 			Serial.println(F("Received 'NO_COMMAND'"));
 #endif
 			if (bFound) {
-				return sendAckTo(frame->Header.FromAddress);
+				if ((_AwaitingFragmentPackage && frame->Header.FragmentNr > 0) || (!_AwaitingFragmentPackage && frame->Header.FragmentNr == 0)) {
+					return true;
+				}
 			}
+			break;
+		}
 		}
 		// Package was handled by handleCommandPackage();
 		return false;
 	}
 	else {
-		return sendAckTo(frame->Header.FromAddress);
+		// Look, if we must handle a command package for a client
+		switch (frame->Header.CommandType) {
+		case SB_COMMAND_NO_COMMAND: {
+#ifdef _DEBUG
+			Serial.println(F("Received 'NO_COMMAND'"));
+#endif
+			if ((_AwaitingFragmentPackage && frame->Header.FragmentNr > 0) || (!_AwaitingFragmentPackage && frame->Header.FragmentNr == 0)) {
+				return true;
+			}
+		}
+		case SB_COMMAND_MASTER_ACK:
+		case SB_COMMAND_PAIRING_ACK:
+			return true;
+		}
+		return false;
 	}
 }
 
@@ -573,7 +569,7 @@ bool SBNetwork::sendMasterAck(SBMacAddress mac){
 		frame.Header = header;
 		frame.Message = (uint8_t*)&(this->NetworkDevice.NetworkKey);
 		frame.MessageSize = sizeof(uint32_t);
-		return this->sendToDeviceInternal(frame, false);
+		return this->sendToDeviceInternal(frame);
 	}
 	else {
 		return false;
@@ -594,7 +590,7 @@ bool SBNetwork::sendPairingAck(SBMacAddress mac){
 		frame.Header = header;
 		frame.Message = NULL;
 		frame.MessageSize = 0;
-		return this->sendToDeviceInternal(frame, false);
+		return this->sendToDeviceInternal(frame);
 	}
 	else {
 		return false;
@@ -605,13 +601,13 @@ bool SBNetwork::checkMaster(){
 	if (this->RunAsClient) {
 		if (this->pingDevice(this->NetworkDevice.MasterMAC)) {
 #ifdef _DEBUG
-			Serial.println("Master OK");
+			Serial.println(F("Master OK"));
 #endif
 			return true;
 		}
 		else {
 #ifdef _DEBUG
-			Serial.println("Master ERROR");
+			Serial.println(F("Master ERROR"));
 #endif
 			return false;
 		}
