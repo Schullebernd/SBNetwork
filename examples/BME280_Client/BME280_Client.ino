@@ -18,7 +18,7 @@
 *               GND --> GND
 *             empty --> CSB
 *             empty --> SD0
-* The I2C Address of BME280 usually is 0x76 --> Put this into bme.begin(0x76) at setup function. If this is not working try 0x77.
+* The I2C Address of BME280 usually is 0x76 --> Put this into  bme.begin(0x76) at setup function. If this is not working try 0x77.
 *
 * Step 3 - Download and include the Sparkfun BME280 library.
 * https://github.com/sparkfun/SparkFun_BME280_Arduino_Library
